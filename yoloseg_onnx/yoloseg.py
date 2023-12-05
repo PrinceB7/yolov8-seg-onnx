@@ -5,7 +5,6 @@ import numpy as np
 import onnxruntime
 from yoloseg_onnx.utils import xywh2xyxy, nms, draw_detections, sigmoid
 
-
 class YOLOSeg:
     def __init__(self, path, conf_thres=0.7, iou_thres=0.5, num_masks=32):
         self.conf_threshold = conf_thres
@@ -87,7 +86,6 @@ class YOLOSeg:
         return boxes[indices], scores[indices], class_ids[indices], mask_predictions[indices]
 
     def process_mask_output(self, mask_predictions, mask_output):
-
         if mask_predictions.shape[0] == 0:
             return []
 
@@ -106,8 +104,8 @@ class YOLOSeg:
         # For every box/mask pair, get the mask map
         mask_maps = np.zeros((len(scale_boxes), self.img_height, self.img_width))
         blur_size = (int(self.img_width / mask_width), int(self.img_height / mask_height))
+        
         for i in range(len(scale_boxes)):
-
             scale_x1 = int(math.floor(scale_boxes[i][0]))
             scale_y1 = int(math.floor(scale_boxes[i][1]))
             scale_x2 = int(math.ceil(scale_boxes[i][2]))
@@ -124,7 +122,6 @@ class YOLOSeg:
                               interpolation=cv2.INTER_CUBIC)
 
             crop_mask = cv2.blur(crop_mask, blur_size)
-
             crop_mask = (crop_mask > 0.5).astype(np.uint8)
             mask_maps[i, y1:y2, x1:x2] = crop_mask
 
@@ -150,11 +147,7 @@ class YOLOSeg:
 
         return boxes
 
-    def draw_detections(self, image, draw_scores=True, mask_alpha=0.4):
-        return draw_detections(image, self.boxes, self.scores,
-                               self.class_ids, mask_alpha)
-
-    def draw_masks(self, image, draw_scores=True, mask_alpha=0.5):
+    def draw_masks(self, image, mask_alpha=0.5):
         return draw_detections(image, self.boxes, self.scores,
                                self.class_ids, mask_alpha, mask_maps=self.mask_maps)
 

@@ -21,6 +21,5 @@ if __name__ == '__main__':
 
     # Draw masks
     combined_img = yoloseg.draw_masks(img)
-    print(combined_img.shape)
     cv2.imshow("Detected Objects", combined_img)
     cv2.waitKey(0)

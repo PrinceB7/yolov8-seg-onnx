@@ -111,36 +111,3 @@ def draw_masks(image, boxes, class_ids, mask_alpha=0.3, mask_maps=None):
             mask_img[y1:y2, x1:x2] = crop_mask_img
 
     return cv2.addWeighted(mask_img, mask_alpha, image, 1 - mask_alpha, 0)
-
-
-def draw_comparison(img1, img2, name1, name2, fontsize=2.6, text_thickness=3):
-    (tw, th), _ = cv2.getTextSize(text=name1, fontFace=cv2.FONT_HERSHEY_DUPLEX,
-                                  fontScale=fontsize, thickness=text_thickness)
-    x1 = img1.shape[1] // 3
-    y1 = th
-    offset = th // 5
-    cv2.rectangle(img1, (x1 - offset * 2, y1 + offset),
-                  (x1 + tw + offset * 2, y1 - th - offset), (0, 115, 255), -1)
-    cv2.putText(img1, name1,
-                (x1, y1),
-                cv2.FONT_HERSHEY_DUPLEX, fontsize,
-                (255, 255, 255), text_thickness)
-
-    (tw, th), _ = cv2.getTextSize(text=name2, fontFace=cv2.FONT_HERSHEY_DUPLEX,
-                                  fontScale=fontsize, thickness=text_thickness)
-    x1 = img2.shape[1] // 3
-    y1 = th
-    offset = th // 5
-    cv2.rectangle(img2, (x1 - offset * 2, y1 + offset),
-                  (x1 + tw + offset * 2, y1 - th - offset), (94, 23, 235), -1)
-
-    cv2.putText(img2, name2,
-                (x1, y1),
-                cv2.FONT_HERSHEY_DUPLEX, fontsize,
-                (255, 255, 255), text_thickness)
-
-    combined_img = cv2.hconcat([img1, img2])
-    if combined_img.shape[1] > 3840:
-        combined_img = cv2.resize(combined_img, (3840, 2160))
-
-    return combined_img
