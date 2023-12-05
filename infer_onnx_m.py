@@ -17,10 +17,10 @@ if __name__ == '__main__':
     # Read image
     img = cv2.imread(args.image_path)
 
-    # Detect Objects
+    # Segment Objects
     boxes, scores, class_ids, masks = yoloseg(img)
 
-    # Draw detections
+    # Draw masks
     combined_img = yoloseg.draw_masks(img)
     print(combined_img.shape)
     cv2.imshow("Detected Objects", combined_img)
