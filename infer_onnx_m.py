@@ -5,9 +5,9 @@ from yoloseg_onnx.yoloseg import YOLOSeg
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Yolov8 onnx inference')
-    parser.add_argument('-c', '--checkpoint_path', default="../yolov8/weights/yolov8n-seg-v1.onnx",
+    parser.add_argument('-c', '--checkpoint_path', default="weights/yolov8n-seg-v1.onnx",
                         help='Dataset version with choices')
-    parser.add_argument('-i','--image_path', default="../data-raw/4/5.png",
+    parser.add_argument('-i','--image_path', default="data/5.png",
                         help='List of model IDs with default values')
     args = parser.parse_args()
     
