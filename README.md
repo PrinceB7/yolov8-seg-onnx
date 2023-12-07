@@ -2,7 +2,7 @@
 Repository to infer Yolov8-seg models from Ultralytics.
 
 ## 1. Information
-Put your exported ONNX model in ./weights/ directory
+Put your exported ONNX model in **weights/** directory
 
 If you do not have a trained and converted model yet, you can follow Ultralytics Documentation
 - Train a pytorch model [Training Docs](https://docs.ultralytics.com/modes/train/#usage-examples)
