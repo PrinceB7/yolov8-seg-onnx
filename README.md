@@ -29,5 +29,5 @@ where:
 example:
 
 ```
-python pipeline.py -c weights/yolov8n-seg-v1.onnx -i data/5.png
+python infer_onnx.py -c weights/yolov8n-seg-v1.onnx -i data/5.png
 ```
