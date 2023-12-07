@@ -1,5 +1,7 @@
 import cv2
 import argparse
+import numpy as np
+from loguru import logger
 from nets.yolo_segment import Segment
 
 class_names = ['ID']
@@ -58,7 +60,7 @@ def draw_masks(image, boxes, class_ids, mask_alpha=0.3, mask_maps=None):
 
 
 if __name__ == '__main__':
-    
+    logger.add("loguru.log")
     parser = argparse.ArgumentParser(description='Yolov8-seg onnx inference')
     parser.add_argument('-c', '--checkpoint_path', default="weights/yolov8n-seg-v1.onnx",
                         help='Dataset version with choices')
@@ -66,10 +68,15 @@ if __name__ == '__main__':
                         help='List of model IDs with default values')
     args = parser.parse_args()
     
-    yoloseg = Segment(args.checkpoint_path, conf_thres=0.5, iou_thres=0.3)
-
+    yoloseg = Segment(args.checkpoint_path, logger, conf_thres=0.5, iou_thres=0.3)
+    
     img = cv2.imread(args.image_path)
     boxes, scores, class_ids, masks = yoloseg(img)
+    logger.info("Inference done")
+    logger.info(f"boxes shape {boxes.shape} \nboxes: {boxes}")
+    logger.info(f"scores shape {scores.shape} \nscores: {scores}")
+    logger.info(f"masks shape {masks.shape} \nmasks: {masks}")
+    
     combined_img = draw_detections(img, boxes, scores, class_ids, masks)
     
     cv2.imshow("Detected Objects", combined_img)
