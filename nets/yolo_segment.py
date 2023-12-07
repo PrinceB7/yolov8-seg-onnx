@@ -1,41 +1,28 @@
-import math
-import time
 import cv2
+import math
 import numpy as np
 import onnxruntime
-from yoloseg_onnx.utils import xywh2xyxy, nms, draw_detections, sigmoid
 
-class YOLOSeg:
+class Segment:
     def __init__(self, path, conf_thres=0.7, iou_thres=0.5, num_masks=32):
         self.conf_threshold = conf_thres
         self.iou_threshold = iou_thres
         self.num_masks = num_masks
 
-        # Initialize model
-        self.initialize_model(path)
+        self.session = onnxruntime.InferenceSession(path, providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
+        self.get_input_output_details()
+    
+    def get_input_output_details(self):
+        model_inputs = self.session.get_inputs()
+        model_outputs = self.session.get_outputs()
 
-    def __call__(self, image):
-        return self.segment_objects(image)
+        self.input_names = [input_.name for input_ in model_inputs]
+        self.output_names = [output.name for output in model_outputs]
 
-    def initialize_model(self, path):
-        self.session = onnxruntime.InferenceSession(path,
-                                                    providers=['CUDAExecutionProvider',
-                                                               'CPUExecutionProvider'])
-        # Get model info
-        self.get_input_details()
-        self.get_output_details()
-
-    def segment_objects(self, image):
-        input_tensor = self.prepare_input(image)
-
-        # Perform inference on the image
-        outputs = self.inference(input_tensor)
-
-        self.boxes, self.scores, self.class_ids, mask_pred = self.process_box_output(outputs[0])
-        self.mask_maps = self.process_mask_output(mask_pred, outputs[1])
-
-        return self.boxes, self.scores, self.class_ids, self.mask_maps
-
+        self.input_shape = model_inputs[0].shape
+        self.input_height = self.input_shape[2]
+        self.input_width = self.input_shape[3]
+    
     def prepare_input(self, image):
         self.img_height, self.img_width = image.shape[:2]
 
@@ -52,14 +39,10 @@ class YOLOSeg:
         return input_tensor
 
     def inference(self, input_tensor):
-        start = time.perf_counter()
         outputs = self.session.run(self.output_names, {self.input_names[0]: input_tensor})
-
-        # print(f"Inference time: {(time.perf_counter() - start)*1000:.2f} ms")
         return outputs
 
     def process_box_output(self, box_output):
-
         predictions = np.squeeze(box_output).T
         num_classes = box_output.shape[1] - self.num_masks - 4
 
@@ -91,42 +74,43 @@ class YOLOSeg:
 
         mask_output = np.squeeze(mask_output)
 
-        # Calculate the mask maps for each box
-        num_mask, mask_height, mask_width = mask_output.shape  # CHW
+        num_mask, mask_height, mask_width = mask_output.shape
         masks = sigmoid(mask_predictions @ mask_output.reshape((num_mask, -1)))
         masks = masks.reshape((-1, mask_height, mask_width))
 
-        # Downscale the boxes to match the mask size
+        # Avoid redundant calculations
         scale_boxes = self.rescale_boxes(self.boxes,
-                                   (self.img_height, self.img_width),
-                                   (mask_height, mask_width))
+                                         (self.img_height, self.img_width),
+                                         (mask_height, mask_width))
 
-        # For every box/mask pair, get the mask map
         mask_maps = np.zeros((len(scale_boxes), self.img_height, self.img_width))
         blur_size = (int(self.img_width / mask_width), int(self.img_height / mask_height))
-        
-        for i in range(len(scale_boxes)):
-            scale_x1 = int(math.floor(scale_boxes[i][0]))
-            scale_y1 = int(math.floor(scale_boxes[i][1]))
-            scale_x2 = int(math.ceil(scale_boxes[i][2]))
-            scale_y2 = int(math.ceil(scale_boxes[i][3]))
 
-            x1 = int(math.floor(self.boxes[i][0]))
-            y1 = int(math.floor(self.boxes[i][1]))
-            x2 = int(math.ceil(self.boxes[i][2]))
-            y2 = int(math.ceil(self.boxes[i][3]))
+        for i, (box, scale_box) in enumerate(zip(self.boxes, scale_boxes)):
+            scale_y1, scale_y2, scale_x1, scale_x2 = map(int, map(math.floor, scale_box))
+            y1, y2, x1, x2 = map(int, map(math.floor, box))
 
-            scale_crop_mask = masks[i][scale_y1:scale_y2, scale_x1:scale_x2]
-            crop_mask = cv2.resize(scale_crop_mask,
-                              (x2 - x1, y2 - y1),
-                              interpolation=cv2.INTER_CUBIC)
-
+            scale_crop_mask = masks[i, scale_y1:scale_y2, scale_x1:scale_x2]
+            crop_mask = cv2.resize(scale_crop_mask, (x2 - x1, y2 - y1), interpolation=cv2.INTER_CUBIC)
             crop_mask = cv2.blur(crop_mask, blur_size)
             crop_mask = (crop_mask > 0.5).astype(np.uint8)
             mask_maps[i, y1:y2, x1:x2] = crop_mask
 
         return mask_maps
 
+
+    def segment_objects(self, image):
+        input_tensor = self.prepare_input(image)
+        outputs = self.inference(input_tensor)
+        self.boxes, self.scores, self.class_ids, mask_pred = self.process_box_output(outputs[0])
+        self.mask_maps = self.process_mask_output(mask_pred, outputs[1])
+
+        return self.boxes, self.scores, self.class_ids, self.mask_maps
+
+    def __call__(self, image):
+        return self.segment_objects(image)
+    
+    
     def extract_boxes(self, box_predictions):
         # Extract boxes from predictions
         boxes = box_predictions[:, :4]
@@ -147,21 +131,8 @@ class YOLOSeg:
 
         return boxes
 
-    def draw_masks(self, image, mask_alpha=0.5):
-        return draw_detections(image, self.boxes, self.scores,
-                               self.class_ids, mask_alpha, mask_maps=self.mask_maps)
-
-    def get_input_details(self):
-        model_inputs = self.session.get_inputs()
-        self.input_names = [model_inputs[i].name for i in range(len(model_inputs))]
-
-        self.input_shape = model_inputs[0].shape
-        self.input_height = self.input_shape[2]
-        self.input_width = self.input_shape[3]
-
-    def get_output_details(self):
-        model_outputs = self.session.get_outputs()
-        self.output_names = [model_outputs[i].name for i in range(len(model_outputs))]
+    
+        
 
     @staticmethod
     def rescale_boxes(boxes, input_shape, image_shape):
@@ -172,3 +143,60 @@ class YOLOSeg:
 
         return boxes
 
+
+
+def nms(boxes, scores, iou_threshold):
+    # Sort by score
+    sorted_indices = np.argsort(scores)[::-1]
+
+    keep_boxes = []
+    while sorted_indices.size > 0:
+        # Pick the last box
+        box_id = sorted_indices[0]
+        keep_boxes.append(box_id)
+
+        # Compute IoU of the picked box with the rest
+        ious = compute_iou(boxes[box_id, :], boxes[sorted_indices[1:], :])
+
+        # Remove boxes with IoU over the threshold
+        keep_indices = np.where(ious < iou_threshold)[0]
+
+        # print(keep_indices.shape, sorted_indices.shape)
+        sorted_indices = sorted_indices[keep_indices + 1]
+
+    return keep_boxes
+
+
+def compute_iou(box, boxes):
+    # Compute xmin, ymin, xmax, ymax for both boxes
+    xmin = np.maximum(box[0], boxes[:, 0])
+    ymin = np.maximum(box[1], boxes[:, 1])
+    xmax = np.minimum(box[2], boxes[:, 2])
+    ymax = np.minimum(box[3], boxes[:, 3])
+
+    # Compute intersection area
+    intersection_area = np.maximum(0, xmax - xmin) * np.maximum(0, ymax - ymin)
+
+    # Compute union area
+    box_area = (box[2] - box[0]) * (box[3] - box[1])
+    boxes_area = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+    union_area = box_area + boxes_area - intersection_area
+
+    # Compute IoU
+    iou = intersection_area / union_area
+
+    return iou
+
+
+def xywh2xyxy(x):
+    # Convert bounding box (x, y, w, h) to bounding box (x1, y1, x2, y2)
+    y = np.copy(x)
+    y[..., 0] = x[..., 0] - x[..., 2] / 2
+    y[..., 1] = x[..., 1] - x[..., 3] / 2
+    y[..., 2] = x[..., 0] + x[..., 2] / 2
+    y[..., 3] = x[..., 1] + x[..., 3] / 2
+    return y
+
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
