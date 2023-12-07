@@ -132,13 +132,6 @@ class Segment:
 
         return boxes
 
-    # def draw_masks(self, image, mask_alpha=0.5):
-    #     return draw_detections(image, self.boxes, self.scores,
-    #                            self.class_ids, mask_alpha, mask_maps=self.mask_maps)
-
-    
-
-    
     def segment_objects(self, image):
         input_tensor = self.prepare_input(image)
         outputs = self.inference(input_tensor)
