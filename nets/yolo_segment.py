@@ -4,11 +4,10 @@ import numpy as np
 import onnxruntime
 
 class Segment:
-    def __init__(self, path, logger, conf_thres=0.7, iou_thres=0.5, num_masks=32):
+    def __init__(self, path, conf_thres=0.7, iou_thres=0.5, num_masks=32):
         self.conf_threshold = conf_thres
         self.iou_threshold = iou_thres
         self.num_masks = num_masks
-        self.logger = logger
         self.session = onnxruntime.InferenceSession(path, providers=['CUDAExecutionProvider','CPUExecutionProvider'])
         self.get_input_output_details()
 
@@ -38,6 +37,7 @@ class Segment:
         input_tensor = input_img[np.newaxis, :, :, :].astype(np.float32)
         self.logger.info(f"input image size after prepare input: {input_tensor.shape}")
         return input_tensor
+
 
     def inference(self, input_tensor):
         return self.session.run(self.output_names, {self.input_names[0]: input_tensor})
@@ -69,6 +69,7 @@ class Segment:
         indices = nms(boxes, scores, self.iou_threshold)
 
         return boxes[indices], scores[indices], class_ids[indices], mask_predictions[indices]
+
 
     def process_mask_output(self, mask_predictions, mask_output):
         if mask_predictions.shape[0] == 0:
@@ -112,19 +113,15 @@ class Segment:
 
         return mask_maps
 
+
     def extract_boxes(self, box_predictions):
-        # Extract boxes from predictions
         boxes = box_predictions[:, :4]
 
-        # Scale boxes to original image dimensions
         boxes = self.rescale_boxes(boxes,
                                    (self.input_height, self.input_width),
                                    (self.img_height, self.img_width))
 
-        # Convert boxes to xyxy format
         boxes = xywh2xyxy(boxes)
-
-        # Check the boxes are within the image
         boxes[:, 0] = np.clip(boxes[:, 0], 0, self.img_width)
         boxes[:, 1] = np.clip(boxes[:, 1], 0, self.img_height)
         boxes[:, 2] = np.clip(boxes[:, 2], 0, self.img_width)
@@ -140,6 +137,7 @@ class Segment:
 
         return self.boxes, self.scores, self.class_ids, self.mask_maps
     
+    
     def __call__(self, image):
         return self.segment_objects(image)
     
@@ -150,9 +148,7 @@ class Segment:
         input_shape = np.array([input_shape[1], input_shape[0], input_shape[1], input_shape[0]])
         boxes = np.divide(boxes, input_shape, dtype=np.float32)
         boxes *= np.array([image_shape[1], image_shape[0], image_shape[1], image_shape[0]])
-
         return boxes
-
 
 
 def nms(boxes, scores, iou_threshold):
@@ -161,7 +157,6 @@ def nms(boxes, scores, iou_threshold):
 
     keep_boxes = []
     while sorted_indices.size > 0:
-        # Pick the last box
         box_id = sorted_indices[0]
         keep_boxes.append(box_id)
 
@@ -170,9 +165,7 @@ def nms(boxes, scores, iou_threshold):
 
         # Remove boxes with IoU over the threshold
         keep_indices = np.where(ious < iou_threshold)[0]
-
         sorted_indices = sorted_indices[keep_indices + 1]
-
     return keep_boxes
 
 
